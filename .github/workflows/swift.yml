@@ -1,0 +1,46 @@
+name: Build TVBox Swift
+
+on:
+  workflow_dispatch:
+  push:
+    branches: ["main"]
+
+jobs:
+  build:
+    runs-on: macos-latest
+
+    steps:
+      - name: Checkout source
+        uses: actions/checkout@v4
+
+      - name: Select Xcode
+        run: xcodebuild -version
+
+      - name: Install XcodeGen
+        run: brew install xcodegen
+
+      - name: Generate Xcode project
+        run: xcodegen generate
+
+      - name: Show schemes
+        run: xcodebuild -list -project tvbox.xcodeproj
+
+      - name: Build iOS Simulator
+        run: |
+          xcodebuild \
+            -project tvbox.xcodeproj \
+            -scheme tvbox \
+            -sdk iphonesimulator \
+            -destination 'generic/platform=iOS Simulator' \
+            -configuration Debug \
+            -derivedDataPath build/DerivedData \
+            CODE_SIGNING_ALLOWED=NO \
+            build
+
+      - name: Upload build artifact
+        if: success()
+        uses: actions/upload-artifact@v4
+        with:
+          name: TVBox-Swift-Simulator
+          path: build/DerivedData/Build/Products/Debug-iphonesimulator/
+          if-no-files-found: error
