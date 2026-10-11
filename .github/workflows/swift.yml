@@ -1,4 +1,4 @@
-name: Build TVBox Swift
+name: Build TVBox Swift iOS
 
 on:
   workflow_dispatch:
@@ -10,11 +10,8 @@ jobs:
     runs-on: macos-latest
 
     steps:
-      - name: Checkout source
+      - name: Checkout
         uses: actions/checkout@v4
-
-      - name: Select Xcode
-        run: xcodebuild -version
 
       - name: Install XcodeGen
         run: brew install xcodegen
@@ -22,25 +19,37 @@ jobs:
       - name: Generate Xcode project
         run: xcodegen generate
 
-      - name: Show schemes
+      - name: Show project schemes
         run: xcodebuild -list -project tvbox.xcodeproj
 
-      - name: Build iOS Simulator
+      - name: Archive for real iPhone
         run: |
-          xcodebuild \
+          xcodebuild archive \
             -project tvbox.xcodeproj \
             -scheme tvbox \
-            -sdk iphonesimulator \
-            -destination 'generic/platform=iOS Simulator' \
-            -configuration Debug \
-            -derivedDataPath build/DerivedData \
-            CODE_SIGNING_ALLOWED=NO \
-            build
+            -configuration Release \
+            -destination 'generic/platform=iOS' \
+            -archivePath "$RUNNER_TEMP/TVBox.xcarchive" \
+            CODE_SIGNING_ALLOWED=NO
 
-      - name: Upload build artifact
-        if: success()
+      - name: Package unsigned IPA
+        run: |
+          APP="$RUNNER_TEMP/TVBox.xcarchive/Products/Applications/TVBox.app"
+
+          if [ ! -d "$APP" ]; then
+            echo "TVBox.app not found in archive"
+            find "$RUNNER_TEMP/TVBox.xcarchive/Products/Applications" -maxdepth 2 -print
+            exit 1
+          fi
+
+          mkdir -p "$RUNNER_TEMP/ipa/Payload"
+          cp -R "$APP" "$RUNNER_TEMP/ipa/Payload/"
+          cd "$RUNNER_TEMP/ipa"
+          /usr/bin/ditto -c -k --sequesterRsrc --keepParent Payload "$GITHUB_WORKSPACE/TVBox-unsigned.ipa"
+
+      - name: Upload IPA
         uses: actions/upload-artifact@v4
         with:
-          name: TVBox-Swift-Simulator
-          path: build/DerivedData/Build/Products/Debug-iphonesimulator/
+          name: TVBox-unsigned-iOS
+          path: TVBox-unsigned.ipa
           if-no-files-found: error
